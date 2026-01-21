@@ -1,3 +1,0 @@
-python -m engine.worker --master-url http://MASTER_IP:8000 --advertise-host THIS_IP --port 8001
-
-python -m engine.master

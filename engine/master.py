@@ -93,6 +93,25 @@ async def status():
     }
 
 
+@app.get("/results/{task_id}")
+async def get_results(task_id: str):
+    if task_id not in results:
+        return {"error": "task not found"}
+    
+    all_results = []
+    for worker_result in results[task_id]:
+        if worker_result.phase == "reduce_complete":
+            all_results.extend(worker_result.results)
+
+    all_results.sort(key=lambda x: x[0] if x else "")   
+    return {
+        "task_id": task_id,
+        "total_items": len(all_results),
+        "data": all_results
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
