@@ -1,0 +1,28 @@
+# Laptop 1: Master + 1 Worker
+services:
+  master:
+    build: .
+    container_name: master
+    command: python -m engine.master
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./tasks:/app/tasks:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    network_mode: host
+  worker1:
+    build: .
+    container_name: worker1
+    # CHANGE MASTER_IP below to current laptop IP
+    command: python -m engine.worker --port 8001 --master-url http://localhost:8000 --advertise-host MASTER_IP
+    environment:
+      - DATA_DIR=/app/data/node1
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./data/node1:/app/data/node1:ro
+    network_mode: host
+    depends_on:
+      - master

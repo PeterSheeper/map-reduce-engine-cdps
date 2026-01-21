@@ -5,8 +5,12 @@ services:
     command: python -m engine.master
     ports:
       - "8000:8000"
+    volumes:
+      - ./tasks:/app/tasks:ro
+    environment:
+      - PYTHONUNBUFFERED=1
     networks:
-      - net
+      - mapreduce
 
   worker1:
     build: .
@@ -14,10 +18,11 @@ services:
     command: python -m engine.worker --port 8001 --master-url http://master:8000 --advertise-host worker1
     environment:
       - DATA_DIR=/app/data/node1
+      - PYTHONUNBUFFERED=1
     volumes:
-      - ./data:/app/data:ro
+      - ./data/node1:/app/data/node1:ro
     networks:
-      - net
+      - mapreduce
     depends_on:
       - master
 
@@ -27,10 +32,11 @@ services:
     command: python -m engine.worker --port 8001 --master-url http://master:8000 --advertise-host worker2
     environment:
       - DATA_DIR=/app/data/node2
+      - PYTHONUNBUFFERED=1
     volumes:
-      - ./data:/app/data:ro
+      - ./data/node2:/app/data/node2:ro
     networks:
-      - net
+      - mapreduce
     depends_on:
       - master
 
@@ -40,10 +46,11 @@ services:
     command: python -m engine.worker --port 8001 --master-url http://master:8000 --advertise-host worker3
     environment:
       - DATA_DIR=/app/data/node3
+      - PYTHONUNBUFFERED=1
     volumes:
-      - ./data:/app/data:ro
+      - ./data/node3:/app/data/node3:ro
     networks:
-      - net
+      - mapreduce
     depends_on:
       - master
 
@@ -53,12 +60,13 @@ services:
     command: python -m engine.worker --port 8001 --master-url http://master:8000 --advertise-host worker4
     environment:
       - DATA_DIR=/app/data/node4
+      - PYTHONUNBUFFERED=1
     volumes:
-      - ./data:/app/data:ro
+      - ./data/node4:/app/data/node4:ro
     networks:
-      - net
+      - mapreduce
     depends_on:
       - master
 
 networks:
-  net:
+  mapreduce:

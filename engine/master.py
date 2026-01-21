@@ -1,6 +1,6 @@
-import asyncio
 import uuid
 from typing import Dict, List
+from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI
@@ -16,12 +16,15 @@ class TaskSubmission(BaseModel):
 workers: Dict[str, WorkerInfo] = {}
 results: Dict[str, List[TaskResult]] = {}
 
-app = FastAPI()
 
-
-@app.on_event("startup")
-async def startup():
+@asynccontextmanager
+async def lifespan(app):
     print("[Master] Starting...")
+    yield
+    print("[Master] Shutting down...")
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 @app.post("/register")
@@ -43,13 +46,19 @@ async def submit(submission: TaskSubmission):
     results[task_id] = []
     print(f"[Master] Submitting task {task_id} to {len(workers)} workers")
     
+    worker_list = [
+        {"worker_id": w.worker_id, "host": w.host, "port": w.port}
+        for w in workers.values()
+    ]
+    
     async with httpx.AsyncClient(timeout=60.0) as client:
         for idx, worker in enumerate(workers.values()):
             assignment = TaskAssignment(
                 task_id=task_id,
                 task_code=submission.task_code,
                 worker_index=idx,
-                num_workers=len(workers)
+                num_workers=len(workers),
+                worker_list=worker_list
             )
             try:
                 await client.post(f"http://{worker.host}:{worker.port}/task", json=assignment.model_dump())
@@ -69,7 +78,7 @@ async def submit_test():
 
 @app.post("/result")
 async def result(res: TaskResult):
-    print(f"[Master] Result from {res.worker_id}: {res.results}")
+    print(f"[Master] {res.phase} from {res.worker_id}: {len(res.results)} items")
     if res.task_id in results:
         results[res.task_id].append(res)
     return {"status": "ok"}
@@ -79,7 +88,8 @@ async def result(res: TaskResult):
 async def status():
     return {
         "workers": len(workers),
-        "results": {k: [r.results for r in v] for k, v in results.items()}
+        "worker_list": [{"id": w.worker_id, "host": w.host, "port": w.port} for w in workers.values()],
+        "results": {k: [{"worker": r.worker_id, "phase": r.phase, "count": len(r.results)} for r in v] for k, v in results.items()}
     }
 
 

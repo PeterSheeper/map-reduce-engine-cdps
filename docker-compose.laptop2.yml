@@ -1,0 +1,28 @@
+# Laptop 2: 2 Workers
+services:
+  worker2:
+    build: .
+    container_name: worker2
+    # CHANGE the IPs below
+    command: python -m engine.worker --port 8001 --master-url http://MASTER_IP:8000 --advertise-host THIS_IP
+    environment:
+      - DATA_DIR=/app/data/node2
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./data/node2:/app/data/node2:ro
+    network_mode: host
+  worker3:
+    build: .
+    container_name: worker3
+    # CHANGE the IPs below
+    command: python -m engine.worker --port 8002 --master-url http://MASTER_IP:8000 --advertise-host THIS_IP
+    environment:
+      - DATA_DIR=/app/data/node3
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./data/node3:/app/data/node3:ro
+    network_mode: host
