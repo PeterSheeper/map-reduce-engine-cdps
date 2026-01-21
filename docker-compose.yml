@@ -1,0 +1,64 @@
+services:
+  master:
+    build: .
+    container_name: master
+    command: python -m engine.master
+    ports:
+      - "8000:8000"
+    networks:
+      - net
+
+  worker1:
+    build: .
+    container_name: worker1
+    command: python -m engine.worker --port 8001 --master-url http://master:8000 --advertise-host worker1
+    environment:
+      - DATA_DIR=/app/data/node1
+    volumes:
+      - ./data:/app/data:ro
+    networks:
+      - net
+    depends_on:
+      - master
+
+  worker2:
+    build: .
+    container_name: worker2
+    command: python -m engine.worker --port 8001 --master-url http://master:8000 --advertise-host worker2
+    environment:
+      - DATA_DIR=/app/data/node2
+    volumes:
+      - ./data:/app/data:ro
+    networks:
+      - net
+    depends_on:
+      - master
+
+  worker3:
+    build: .
+    container_name: worker3
+    command: python -m engine.worker --port 8001 --master-url http://master:8000 --advertise-host worker3
+    environment:
+      - DATA_DIR=/app/data/node3
+    volumes:
+      - ./data:/app/data:ro
+    networks:
+      - net
+    depends_on:
+      - master
+
+  worker4:
+    build: .
+    container_name: worker4
+    command: python -m engine.worker --port 8001 --master-url http://master:8000 --advertise-host worker4
+    environment:
+      - DATA_DIR=/app/data/node4
+    volumes:
+      - ./data:/app/data:ro
+    networks:
+      - net
+    depends_on:
+      - master
+
+networks:
+  net:

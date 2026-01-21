@@ -1,0 +1,4 @@
+hello world hello
+map reduce is powerful
+distributed computing is fun
+hello from node one
