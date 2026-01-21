@@ -29,26 +29,10 @@ def map_func(data_dir, worker_id):
     return [("key1", value1), ("key2", value2), ...]
 
 def shuffle_func(key):
-    """Decide which worker handles this key. Must be deterministic!"""
+    """Decide which worker handles this key."""
     return zlib.adler32(str(key).encode())
 
 def reduce_func(key, values):
     """Aggregate all values for a key."""
     return sum(values)  # or any aggregation
 ```
-
-## Cross-Laptop Setup
-
-Edit IPs in `docker-compose.laptop1.yml`, `laptop2.yml`, `laptop3.yml`, then:
-
-```bash
-# Laptop 1 (master)
-docker-compose -f docker-compose.laptop1.yml up --build
-
-# Laptop 2 (workers)
-docker-compose -f docker-compose.laptop2.yml up --build
-```
-
-## Data
-
-Place data files for each worker in `data/node1/`, `data/node2/`, etc.
