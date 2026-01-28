@@ -31,6 +31,9 @@ class TaskResult(BaseModel):
     task_id: str
     worker_id: str
     phase: str
+    time: float
     results: List[Any]
     success: bool
     error: Optional[str] = None
+    metrics: Optional[Dict[str, Any]] = None
+

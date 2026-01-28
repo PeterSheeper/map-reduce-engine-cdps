@@ -2,13 +2,29 @@
 
 A distributed Map-Reduce engine built with Python and FastAPI.
 
-## Quick Start (Local)
+## Quick Start (Local - Docker)
 
 ```bash
 docker-compose up --build
 ```
 
-Then open: http://localhost:8000/submit
+## Manual Start
+
+### MASTER
+```bash
+python -m engine.master
+```
+### WORKER
+```bash
+python -m engine.worker --master-url http://MASTER_IP:8000 --advertise-host THIS_IP --port PORT --data-dir DATA_DIR
+```
+MASTER_IP - IP address of the machine running the master
+
+THIS_IP - IP address of the machine running the worker
+
+PORT - port of the worker (on one machine has to be different for each worker and distict from master port e.g 8001 or 8002)
+
+DATA_DIR - path to the directory with data for specific worker (has to be different for each worker)
 
 ## Endpoints
 

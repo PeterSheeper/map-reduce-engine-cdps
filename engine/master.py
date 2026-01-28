@@ -3,10 +3,13 @@ from typing import Dict, List
 from contextlib import asynccontextmanager
 
 import httpx
+import asyncio
 from fastapi import FastAPI
 from pydantic import BaseModel
 
 from .models import WorkerInfo, WorkerRegistration, TaskAssignment, TaskResult
+
+SUBMIT_TIMEOUT = 300.0
 
 
 class TaskSubmission(BaseModel):
@@ -51,8 +54,8 @@ async def submit(submission: TaskSubmission):
         for w in workers.values()
     ]
     
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        for idx, worker in enumerate(workers.values()):
+    async with httpx.AsyncClient(timeout=SUBMIT_TIMEOUT) as client:
+        async def send_to_worker(idx, worker):
             assignment = TaskAssignment(
                 task_id=task_id,
                 task_code=submission.task_code,
@@ -61,10 +64,12 @@ async def submit(submission: TaskSubmission):
                 worker_list=worker_list
             )
             try:
-                await client.post(f"http://{worker.host}:{worker.port}/task", json=assignment.model_dump())
                 print(f"[Master] Task sent to {worker.worker_id}")
+                await client.post(f"http://{worker.host}:{worker.port}/task", json=assignment.model_dump())
             except Exception as e:
                 print(f"[Master] Failed: {e}")
+        
+        await asyncio.gather(*[send_to_worker(idx, w) for idx, w in enumerate(workers.values())])
     
     return {"task_id": task_id}
 
@@ -89,7 +94,13 @@ async def status():
     return {
         "workers": len(workers),
         "worker_list": [{"id": w.worker_id, "host": w.host, "port": w.port} for w in workers.values()],
-        "results": {k: [{"worker": r.worker_id, "phase": r.phase, "count": len(r.results)} for r in v] for k, v in results.items()}
+        "results": {k: [{
+            "worker": r.worker_id, 
+            "phase": r.phase, 
+            "time": r.time, 
+            "count": len(r.results),
+            "metrics": r.metrics
+        } for r in v] for k, v in results.items()}
     }
 
 
@@ -103,7 +114,9 @@ async def get_results(task_id: str):
         if worker_result.phase == "reduce_complete":
             all_results.extend(worker_result.results)
 
-    all_results.sort(key=lambda x: x[0] if x else "")   
+    # Uncomment below for accident analysis to sort by danger score
+    # all_results.sort(key=lambda x: x[1].get('danger_score', 0) if isinstance(x[1], dict) else x[1], reverse=True)
+    
     return {
         "task_id": task_id,
         "total_items": len(all_results),

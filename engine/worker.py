@@ -1,8 +1,8 @@
 import os
-import zlib
 import asyncio
 import argparse
 import httpx
+import time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
@@ -13,6 +13,9 @@ MASTER_URL = None
 DATA_DIR = None
 ADVERTISE_HOST = None
 PORT = None
+
+SHUFFLE_TIMEOUT = 10 * 60
+SHUFFLE_HTTP_TIMEOUT = 180.0  # 3 minutes per shuffle send
 
 shuffle_received = []
 shuffle_count = 0
@@ -67,15 +70,20 @@ async def execute_task(assignment: TaskAssignment):
         namespace = {}
         exec(assignment.task_code, namespace)
         map_func = namespace.get("map_func")
-        shuffle_func = namespace.get("shuffle_func", lambda key: zlib.adler32(str(key).encode()))
+        shuffle_func = namespace.get("shuffle_func")
+        
+        start_time = time.time()
         
         # === MAP ===
         print(f"[{WORKER_ID}] MAP starting...")
+        map_start = time.time()
         map_output = map_func(DATA_DIR, WORKER_ID)
-        print(f"[{WORKER_ID}] MAP done: {len(map_output)} pairs")
+        map_time = time.time() - map_start
+        print(f"[{WORKER_ID}] MAP done: {len(map_output)} pairs in {map_time:.2f}s")
         
         # === SHUFFLE ===
         print(f"[{WORKER_ID}] SHUFFLE starting...")
+        shuffle_start = time.time()
         
         # Split data by target worker
         buckets = {i: [] for i in range(assignment.num_workers)}
@@ -88,7 +96,7 @@ async def execute_task(assignment: TaskAssignment):
         print(f"[{WORKER_ID}] Keeping {len(my_data)} items")
         
         # Send to other workers
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=SHUFFLE_HTTP_TIMEOUT) as client:
             for i, worker in enumerate(assignment.worker_list):
                 if i == assignment.worker_index:
                     continue
@@ -101,7 +109,7 @@ async def execute_task(assignment: TaskAssignment):
                 )
                 url = f"http://{worker['host']}:{worker['port']}/shuffle"
                 
-                for attempt in range(3):
+                for attempt in range(10):
                     try:
                         await client.post(url, json=shuffle_data.model_dump())
                         print(f"[{WORKER_ID}] Sent {len(items)} items to {worker['worker_id']}")
@@ -116,14 +124,16 @@ async def execute_task(assignment: TaskAssignment):
         # Wait for other workers
         if shuffle_expected > 0:
             print(f"[{WORKER_ID}] Waiting for {shuffle_expected} workers...")
-            await asyncio.wait_for(shuffle_done.wait(), timeout=120.0)
+            await asyncio.wait_for(shuffle_done.wait(), timeout=SHUFFLE_TIMEOUT)
         
         # Combine all data
         all_data = my_data + shuffle_received
-        print(f"[{WORKER_ID}] SHUFFLE done: {len(all_data)} items")
+        shuffle_time = time.time() - shuffle_start
+        print(f"[{WORKER_ID}] SHUFFLE done: {len(all_data)} items in {shuffle_time:.2f}s")
         
         # === REDUCE ===
         print(f"[{WORKER_ID}] REDUCE starting...")
+        reduce_start = time.time()
         
         # Group by key
         grouped = {}
@@ -144,15 +154,29 @@ async def execute_task(assignment: TaskAssignment):
         else:
             reduce_results = [(k, v) for k, v in grouped.items()]
         
-        print(f"[{WORKER_ID}] REDUCE done: {len(reduce_results)} results")
+        reduce_time = time.time() - reduce_start
+        print(f"[{WORKER_ID}] REDUCE done: {len(reduce_results)} results in {reduce_time:.2f}s")
         
-        # Send final results to master
+        end_time = time.time()
+        total_time = end_time - start_time
+        print(f"[{WORKER_ID}] Task {assignment.task_id} complete in {total_time:.2f} seconds")
+        
+        # Send final results to master with metrics
         result = TaskResult(
             task_id=assignment.task_id,
             worker_id=WORKER_ID,
             phase="reduce_complete",
+            time=total_time,
             results=reduce_results,
-            success=True
+            success=True,
+            metrics={
+                "map_time": round(map_time, 2),
+                "shuffle_time": round(shuffle_time, 2),
+                "reduce_time": round(reduce_time, 2),
+                "map_output_count": len(map_output),
+                "shuffle_received_count": len(all_data),
+                "unique_keys": len(grouped)
+            }
         )
         async with httpx.AsyncClient(timeout=30.0) as client:
             await client.post(f"{MASTER_URL}/result", json=result.model_dump())
@@ -173,10 +197,11 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=8001)
     parser.add_argument("--master-url", default="http://localhost:8000")
     parser.add_argument("--advertise-host", default="localhost")
+    parser.add_argument("--data-dir", default="./data")
     args = parser.parse_args()
     
     MASTER_URL = args.master_url
-    DATA_DIR = os.environ.get("DATA_DIR", "./data")
+    DATA_DIR = os.environ.get("DATA_DIR", args.data_dir)
     ADVERTISE_HOST = args.advertise_host
     PORT = args.port
     
