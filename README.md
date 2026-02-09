@@ -40,15 +40,23 @@ DATA_DIR - path to the directory with data for specific worker (has to be differ
 Tasks must define these functions in a Python file:
 
 ```python
+def init_func(worker_id, master_url, data_dir, advertise_host, port):
+    """(optional) Makes init operations based on worker data."""
+    # make any init operations you want, having worker configuration
+    # this method is optional, you don't need to implement it
+
 def map_func(data_dir, worker_id):
     """Return list of (key, value) pairs."""
     return [("key1", value1), ("key2", value2), ...]
 
 def shuffle_func(key):
-    """Decide which worker handles this key."""
-    return zlib.adler32(str(key).encode())
+    """Decide which workers handle this key."""
+    return [zlib.adler32(str(key).encode()), ...]
 
-def reduce_func(key, values):
-    """Aggregate all values for a key."""
-    return sum(values)  # or any aggregation
+def reduce_func(data, worker_id):
+    """Processes data (in format: List[dict_item[key, values]]."""
+    results = []
+    for key, values in data:
+        results.append((key, sum(values))) # or any other aggregation
+    return results
 ```

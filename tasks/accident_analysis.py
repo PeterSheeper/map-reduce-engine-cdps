@@ -88,33 +88,43 @@ def calculate_duration(row):
 
 
 def shuffle_func(key):
+    """
+    Decides which worker gets this key.
+    Returns a list of integers, for each integer engine does: target % num_workers
+    """
     weather = key.split('_')[1] if '_' in key else ''
     
     if weather == 'Fair':
-        return 0
+        return [0]
     elif weather == 'Cloudy':
-        return 1
+        return [1]
     elif weather == 'PartlyClear':
-        return 2
+        return [2]
     else:
-        return 3
+        return [3]
 
 
-def reduce_func(key, values):
-    count = len(values)
-    total_impact = sum(values)
-    avg_impact = total_impact / count if count > 0 else 0
-    min_impact = min(values) if values else 0
-    max_impact = max(values) if values else 0
-    log_factor = math.log(count + 1)
-    danger_score = avg_impact * log_factor
-    
-    return {
-        'count': count,
-        'log_count': round(log_factor, 2),
-        'avg_impact': round(avg_impact, 2),
-        'danger_score': round(danger_score, 2),
-        'min_impact': round(min_impact, 2),
-        'max_impact': round(max_impact, 2),
-        'formula': f"{round(avg_impact, 2)} * {round(log_factor, 2)} = {round(danger_score, 2)}"
-    }
+def reduce_func(data, worker_id):
+    """Processes data (in format: List[dict_item[key, values]]."""
+    results = []
+    for key, values in data:
+        count = len(values)
+        total_impact = sum(values)
+        avg_impact = total_impact / count if count > 0 else 0
+        min_impact = min(values) if values else 0
+        max_impact = max(values) if values else 0
+        log_factor = math.log(count + 1)
+        danger_score = avg_impact * log_factor
+
+        result = {
+            'count': count,
+            'log_count': round(log_factor, 2),
+            'avg_impact': round(avg_impact, 2),
+            'danger_score': round(danger_score, 2),
+            'min_impact': round(min_impact, 2),
+            'max_impact': round(max_impact, 2),
+            'formula': f"{round(avg_impact, 2)} * {round(log_factor, 2)} = {round(danger_score, 2)}"
+        }
+
+        results.append((key, result))
+    return results

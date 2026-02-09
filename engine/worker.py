@@ -69,11 +69,16 @@ async def execute_task(assignment: TaskAssignment):
     try:
         namespace = {}
         exec(assignment.task_code, namespace)
+        init_func = namespace.get("init_func")
         map_func = namespace.get("map_func")
         shuffle_func = namespace.get("shuffle_func")
+        reduce_func = namespace.get("reduce_func")
         
         start_time = time.time()
-        
+        # === INIT ===
+        if init_func:
+            init_func(WORKER_ID, MASTER_URL, DATA_DIR, ADVERTISE_HOST, PORT)
+        print(f"[{WORKER_ID}] Ready to process task {assignment.task_id}.")
         # === MAP ===
         print(f"[{WORKER_ID}] MAP starting...")
         map_start = time.time()
@@ -88,8 +93,10 @@ async def execute_task(assignment: TaskAssignment):
         # Split data by target worker
         buckets = {i: [] for i in range(assignment.num_workers)}
         for key, value in map_output:
-            target = shuffle_func(key) % assignment.num_workers
-            buckets[target].append((key, value))
+            targets = shuffle_func(key)
+            for target in targets:
+                target = target % assignment.num_workers
+                buckets[target].append((key, value))
         
         # Keep own data
         my_data = buckets[assignment.worker_index]
@@ -109,7 +116,7 @@ async def execute_task(assignment: TaskAssignment):
                 )
                 url = f"http://{worker['host']}:{worker['port']}/shuffle"
                 
-                for attempt in range(10):
+                for attempt in range(3):
                     try:
                         await client.post(url, json=shuffle_data.model_dump())
                         print(f"[{WORKER_ID}] Sent {len(items)} items to {worker['worker_id']}")
@@ -145,12 +152,8 @@ async def execute_task(assignment: TaskAssignment):
         print(f"[{WORKER_ID}] Grouped into {len(grouped)} unique keys")
         
         # Apply reduce function to each key
-        reduce_func = namespace.get("reduce_func")
         if reduce_func:
-            reduce_results = []
-            for key, values in grouped.items():
-                reduced_value = reduce_func(key, values)
-                reduce_results.append((key, reduced_value))
+            reduce_results = reduce_func(grouped.items(), WORKER_ID)
         else:
             reduce_results = [(k, v) for k, v in grouped.items()]
         
