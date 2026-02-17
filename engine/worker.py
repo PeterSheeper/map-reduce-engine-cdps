@@ -14,8 +14,8 @@ DATA_DIR = None
 ADVERTISE_HOST = None
 PORT = None
 
-SHUFFLE_TIMEOUT = 10 * 60
-SHUFFLE_HTTP_TIMEOUT = 180.0  # 3 minutes per shuffle send
+SHUFFLE_TIMEOUT = 24 * 60 * 60
+SHUFFLE_HTTP_TIMEOUT = 24 * 60 * 60  # 24h per shuffle send
 
 shuffle_received = []
 shuffle_count = 0
